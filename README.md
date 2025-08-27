@@ -1,46 +1,52 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/010GyyLK)
-# Exam #1234: "Exam Title"
-## Student: s123456 LASTNAME FIRSTNAME 
+# Train Reservation System
 
-## React Client Application Routes
+A web application for managing train seat reservations with three car classes (first, second, economy) and user authentication with optional 2FA.
 
-- Route `/`: page content and purpose
-- Route `/something/:param`: page content and purpose, param specification
-- ...
+## Server-side
 
-## API Server
+### HTTP APIs offered by the server
 
-- POST `/api/login`
-  - request parameters and request body content
-  - response body content
-- GET `/api/something`
-  - request parameters
-  - response body content
-- POST `/api/something`
-  - request parameters and request body content
-  - response body content
-- ...
+- **POST `/api/sessions`**: Login endpoint - Parameters: `{username, password}` - Returns: User object with authentication status
+- **POST `/api/sessions/totp`**: 2FA TOTP verification - Parameters: `{totpCode}` - Returns: Complete authentication with 2FA
+- **GET `/api/sessions/current`**: Get current user session - Parameters: none (uses session cookies) - Returns: Current user info or 401
+- **DELETE `/api/sessions/current`**: Logout endpoint - Parameters: none - Returns: Logout confirmation
+- **GET `/api/seats/:carClass`**: Get seat map for a car class - Parameters: carClass (first|second|economy) - Returns: Seats array and statistics
+- **GET `/api/reservations`**: Get user's reservations - Parameters: none (requires auth) - Returns: Array of user reservations with seats
+- **POST `/api/reservations`**: Create new reservation - Parameters: `{seatIds: [array]}` - Returns: New reservation object
+- **DELETE `/api/reservations/:id`**: Delete reservation - Parameters: reservation id in URL - Returns: Deletion confirmation
 
-## Database Tables
+### Database tables
 
-- Table `users` - contains xx yy zz
-- Table `something` - contains ww qq ss
-- ...
+- **users**: User accounts (id, username, name, hash, salt, otp_secret)
+- **seats**: Train seats (id, car_class, row_number, seat_number, seat_code)  
+- **reservations**: Reservation records (id, user_id, created_at)
+- **reservation_seats**: Links reservations to seats (reservation_id, seat_id)
 
-## Main React Components
+## Client-side
 
-- `ListOfSomething` (in `List.js`): component purpose and main functionality
-- `GreatButton` (in `GreatButton.js`): component purpose and main functionality
-- ...
+### React application routes
 
-(only _main_ components, minor ones may be skipped)
+- **/** (MainSeatView): Main page showing seat availability for each car class without authentication required
+- **/login**: Login page with username/password and optional 2FA TOTP verification  
+- **/reservations**: Authenticated page for managing user reservations with seat selection and booking
 
-## Screenshot
+### Main React components
 
-![Screenshot](./img/screenshot.png)
+- **App**: Main application component handling routing, authentication state, and global notifications
+- **LoginForm**: Login interface supporting both standard and 2FA authentication methods
+- **MainSeatView**: Public seat availability view with car class selection and real-time seat status
+- **SeatSelectionView**: Authenticated reservation management with interactive seat maps and booking functionality
 
-## Users Credentials
+## Overall
 
-- username, password (plus any other requested info which depends on the text)
-- username, password (plus any other requested info which depends on the text)
+### Screenshot
+
+![Reservation Management Page](./img/screenshot.png)
+
+### Usernames and passwords
+
+- **mario** / **password** - Regular user with two reservations in first class
+- **lucia** / **password** - Regular user with reservations in second and economy classes  
+- **giovanni** / **password** - Regular user with one reservation in each class (first, second, economy)
+- **anna** / **password** - Regular user with no reservations (2FA enabled for first class access)
 
