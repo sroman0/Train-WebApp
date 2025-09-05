@@ -189,7 +189,9 @@ function App() {
                           messageType === 'warning' ? '#e0a800' : 
                           messageType === 'info' ? '#138496' : 
                           '#c82333'
-                        }`
+                        }`,
+                        position: 'relative',
+                        zIndex: 9999
                       }}
                     >
                       <div className="d-flex align-items-center">

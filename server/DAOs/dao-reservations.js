@@ -56,23 +56,60 @@ exports.getUserReservations = (userId) => {
 exports.createReservation = (userId, seatIds) => {
   return new Promise((resolve, reject) => {
     db.serialize(() => {
-      db.run('BEGIN TRANSACTION');
-      
-      try {
-        // First, check if all seats are available
-        daoSeats.areSeatsAvailable(seatIds)
-          .then(available => {
-            if (!available) {
+      db.run('BEGIN IMMEDIATE TRANSACTION', (err) => {
+        if (err) {
+          return reject(new Error('Failed to start transaction: ' + err.message));
+        }
+
+        // CRITICAL: Check seat availability WITHIN the transaction
+        // This prevents race conditions between check and reservation
+        const checkSeatsSql = `
+          SELECT id, seat_code, is_occupied 
+          FROM seats 
+          WHERE id IN (${seatIds.map(() => '?').join(',')})
+        `;
+        
+        db.all(checkSeatsSql, seatIds, (err, seatRows) => {
+          if (err) {
+            db.run('ROLLBACK');
+            return reject(new Error('Failed to check seat availability: ' + err.message));
+          }
+          
+          // Check if we found all requested seats
+          if (seatRows.length !== seatIds.length) {
+            db.run('ROLLBACK');
+            return reject(new Error('Some requested seats do not exist'));
+          }
+          
+          // Check which seats are already occupied - CRITICAL CHECK
+          const occupiedSeats = seatRows.filter(seat => seat.is_occupied);
+          if (occupiedSeats.length > 0) {
+            db.run('ROLLBACK');
+            const occupiedCodes = occupiedSeats.map(seat => seat.seat_code);
+            return reject(new Error(`Seats no longer available: ${occupiedCodes.join(', ')}. Please refresh and select different seats.`));
+          }
+          
+          // ONLY proceed if all seats are available
+          // First, atomically mark seats as occupied to prevent other reservations
+          const occupySeatsSql = `UPDATE seats SET is_occupied = 1 WHERE id IN (${seatIds.map(() => '?').join(',')}) AND is_occupied = 0`;
+          db.run(occupySeatsSql, seatIds, function(err) {
+            if (err) {
               db.run('ROLLBACK');
-              return reject(new Error('Some seats are no longer available'));
+              return reject(new Error('Failed to mark seats as occupied: ' + err.message));
             }
             
-            // Create the reservation
+            // Verify all seats were successfully marked as occupied
+            if (this.changes !== seatIds.length) {
+              db.run('ROLLBACK');
+              return reject(new Error('Some seats were taken by another user during reservation'));
+            }
+            
+            // Now create the reservation record
             const insertReservationSql = 'INSERT INTO reservations (user_id) VALUES (?)';
             db.run(insertReservationSql, [userId], function(err) {
               if (err) {
                 db.run('ROLLBACK');
-                return reject(err);
+                return reject(new Error('Failed to create reservation: ' + err.message));
               }
               
               const reservationId = this.lastID;
@@ -80,40 +117,36 @@ exports.createReservation = (userId, seatIds) => {
               // Link seats to reservation
               let completed = 0;
               const totalSeats = seatIds.length;
+              let hasError = false;
               
               seatIds.forEach(seatId => {
+                if (hasError) return;
+                
                 const insertSeatSql = 'INSERT INTO reservation_seats (reservation_id, seat_id) VALUES (?, ?)';
                 db.run(insertSeatSql, [reservationId, seatId], (err) => {
-                  if (err) {
+                  if (err && !hasError) {
+                    hasError = true;
                     db.run('ROLLBACK');
-                    return reject(err);
+                    return reject(new Error('Failed to link seats to reservation: ' + err.message));
                   }
                   
                   completed++;
-                  if (completed === totalSeats) {
-                    // Mark seats as occupied
-                    daoSeats.occupySeats(seatIds)
-                      .then(() => {
-                        db.run('COMMIT');
-                        resolve(reservationId);
-                      })
-                      .catch(err => {
+                  if (completed === totalSeats && !hasError) {
+                    // Everything successful, commit the transaction
+                    db.run('COMMIT', (err) => {
+                      if (err) {
                         db.run('ROLLBACK');
-                        reject(err);
-                      });
+                        return reject(new Error('Failed to commit reservation: ' + err.message));
+                      }
+                      resolve(reservationId);
+                    });
                   }
                 });
               });
             });
-          })
-          .catch(err => {
-            db.run('ROLLBACK');
-            reject(err);
           });
-      } catch (error) {
-        db.run('ROLLBACK');
-        reject(error);
-      }
+        });
+      });
     });
   });
 };

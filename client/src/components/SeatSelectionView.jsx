@@ -17,7 +17,6 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
   const [autoSelectCount, setAutoSelectCount] = useState('');
   const [loading, setLoading] = useState(false);
   const [reserving, setReserving] = useState(false);
-  const [failedSeats, setFailedSeats] = useState([]); // Seats that caused reservation failure
 
   // Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -82,6 +81,25 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
     }
   };
 
+  // Force refresh seats and clear all local state
+  const forceRefreshSeats = async () => {
+    console.log('🔄 FORCE REFRESH: Clearing all local state and reloading...');
+    
+    // Clear all local state first
+    setRequestedSeats([]);
+    setAutoSelectCount('');
+    setSelectedReservationId(null);
+    setIsNewReservation(true);
+    
+    // Force reload both seats and reservations
+    await Promise.all([
+      loadSeats(),
+      loadReservations()
+    ]);
+    
+    setMessage('Seat map refreshed', 'info');
+  };
+
   // Load seats for current class
   const loadSeats = async () => {
     setLoading(true);
@@ -101,7 +119,6 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
   const handleClassChange = (newClass) => {
     setSelectedClass(newClass);
     setRequestedSeats([]); // Clear requested seats when changing class
-    setFailedSeats([]); // Clear failed seats highlight
   };
 
   // Handle reservation selection (show seats in orange)
@@ -109,7 +126,6 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
     setSelectedReservationId(reservationId);
     setIsNewReservation(false);
     setRequestedSeats([]); // Clear any requested seats
-    setFailedSeats([]); // Clear failed seats highlight
     
     // Find the reservation and switch to its class
     const reservation = reservations.find(r => r.id === reservationId);
@@ -123,16 +139,10 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
     setSelectedReservationId(null);
     setIsNewReservation(true);
     setRequestedSeats([]);
-    setFailedSeats([]);
   };
 
   // Get seat status and color
   const getSeatStatus = (seat) => {
-    // Check if seat is highlighted due to failed reservation (show for 7 seconds)
-    if (failedSeats.includes(seat.id)) {
-      return { status: 'failed', color: 'primary', disabled: true, customStyle: null }; // Blue for failed seats
-    }
-    
     // Check if seat is occupied by current user (in any reservation)
     const userSeat = userSeats.find(us => us.id === seat.id);
     if (userSeat) {
@@ -218,30 +228,35 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
     setReserving(true);
     try {
       await API.createReservation(requestedSeats);
-      setMessage(`Reserved ${requestedSeats.length} seat${requestedSeats.length > 1 ? 's' : ''}`, 'success');
+      setMessage(`Successfully reserved ${requestedSeats.length} seat${requestedSeats.length > 1 ? 's' : ''}!`, 'success');
       
-      // Reload data
+      // Reload data to show the new reservation
       await loadReservations();
       await loadSeats();
       
-      // Clear requested seats
+      // Clear the reservation attempt
       setRequestedSeats([]);
       setAutoSelectCount('');
       
     } catch (error) {
       console.error('Reservation failed:', error);
+      
+      // Show clear error message to the user
       setMessage(`Reservation failed: ${error.message}`, 'danger');
       
-      // Highlight seats that were already occupied
-      const errorMsg = error.message.toLowerCase();
-      if (errorMsg.includes('occupied') || errorMsg.includes('available')) {
-        // Show failed seats in blue for 7 seconds
-        setFailedSeats(requestedSeats);
-        setTimeout(() => setFailedSeats([]), 7000);
-      }
+      // CRITICAL: Always refresh after any failure to ensure consistent state
+      console.log('🔄 Refreshing seat data after reservation failure...');
+      await Promise.all([
+        loadSeats(),        // Refresh seat map with current occupied state
+        loadReservations()  // Refresh user's reservations
+      ]);
       
-      // Reload seats to get current state
-      await loadSeats();
+      // Clear the failed reservation attempt completely
+      setRequestedSeats([]);
+      setAutoSelectCount('');
+      
+      // The page now shows the true current state
+      console.log('✅ Seat data refreshed after failure');
     } finally {
       setReserving(false);
     }
@@ -574,7 +589,7 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
                 <Button 
                   variant="outline-light" 
                   size="sm" 
-                  onClick={loadSeats}
+                  onClick={forceRefreshSeats}
                   disabled={loading}
                   className="rounded-pill"
                 >
