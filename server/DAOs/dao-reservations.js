@@ -41,7 +41,7 @@ exports.getUserReservations = (userId) => {
             id: row.seat_id,
             row_number: row.row_number,
             seat_number: row.seat_number,
-            seat_code: row.seat_code
+            seat_code: row.seat_code 
           });
         });
         

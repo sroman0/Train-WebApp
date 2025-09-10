@@ -1,331 +1,198 @@
-import React, { useState } from 'react';
-import { Container, Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
+import { useState } from 'react';
+import { Form, Button, Alert, Row, Col } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 
-function LoginForm({ onLogin, totpRequired, onTotp, onSkipTotp, userInfo }) {
+function LoginForm({ onLogin, totpRequired, onTotp, onSkipTotp }) {
+
+  // state for the username
   const [username, setUsername] = useState('');
+  // state for the password
   const [password, setPassword] = useState('');
+  // state for the TOTP code
   const [totpCode, setTotpCode] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [showTotpChoice, setShowTotpChoice] = useState(false);
-  const [showTotpForm, setShowTotpForm] = useState(false);
+  // state for error messages
+  const [errorMessage, setErrorMessage] = useState('');
+  // state for loading state during submission
+  const [isLoading, setIsLoading] = useState(false);
+  
   const navigate = useNavigate();
 
-  const handleBackToHome = () => {
-    navigate('/');
-  };
+  // ###########################################################################
+  // HANDLERS
+  // ###########################################################################
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
+  // Handle form submission for login or TOTP verification
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setErrorMessage(''); // Clear any previous errors
+    setIsLoading(true);
+    
     try {
-      const result = await onLogin({ username, password });
-      // After successful login, check if user can choose 2FA
-      if (result && result.canDoTotp && !result.isTotp) {
-        setShowTotpChoice(true);
+      if (totpRequired) {
+        await onTotp(totpCode);
+      } else {
+        await onLogin({ username, password });
       }
     } catch (error) {
-      setError(error.message || 'Login failed. Please check your credentials.');
+      // Set appropriate error message based on the type of login
+      if (totpRequired) {
+        setErrorMessage('Invalid TOTP code. Please try again.');
+      } else {
+        setErrorMessage('Invalid username or password. Please check your credentials and try again.');
+      }
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleTotpSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      await onTotp(totpCode);
-    } catch (error) {
-      setError(error.message || 'Invalid TOTP code. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+  //-----------------------------------------------------------------------------
+  // Clear error message when user starts typing
+  const handleUsernameChange = (e) => {
+    setUsername(e.target.value);
+    if (errorMessage) setErrorMessage('');
   };
 
-  const handleEnable2FA = () => {
-    setShowTotpChoice(false);
-    setShowTotpForm(true);
-    setTotpCode(''); // Clear any previous TOTP code
+  //-----------------------------------------------------------------------------
+  // Handle password change
+  const handlePasswordChange = (e) => {
+    setPassword(e.target.value);
+    if (errorMessage) setErrorMessage('');
   };
 
-  const handleSkip2FA = () => {
-    setShowTotpChoice(false);
-    setShowTotpForm(false);
-    // Continue with standard access (no first-class reservations)
-    if (onSkipTotp) {
-      onSkipTotp();
-    }
+  //-----------------------------------------------------------------------------
+  // Handle TOTP code change
+  const handleTotpChange = (e) => {
+    setTotpCode(e.target.value);
+    if (errorMessage) setErrorMessage('');
   };
 
-  const handleBackToLogin = () => {
-    setTotpCode('');
-    setError(null);
-    setShowTotpChoice(false);
-    setShowTotpForm(false);
-    if (onSkipTotp) {
-      onSkipTotp();
-    }
-  };
-
-  // If user just logged in and can choose 2FA
-  if (showTotpChoice && userInfo && userInfo.canDoTotp && !userInfo.isTotp) {
-    return (
-      <div className="login-container">
-        <Card className="shadow-lg border-0 card-transparent login-form-card">
-          <Card.Body className="p-5">
-            <div className="text-center mb-4">
-              <i className="bi bi-shield-check display-3 text-primary-custom mb-3"></i>
-              <h3 className="fw-bold text-primary-custom mb-2">
-                Two-Factor Authentication
-              </h3>
-              <p className="text-muted">
-                Choose whether to enable 2FA for full access or continue with standard access
-              </p>
-            </div>
-
-            {error && (
-              <Alert variant="danger" className="mb-4 rounded-3 border-0">
-                <div className="d-flex align-items-center">
-                  <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                  {error}
-                </div>
-              </Alert>
-            )}
-
-            <div className="mb-4 p-3 bg-light rounded-3">
-              <h6 className="fw-bold mb-2">
-                <i className="bi bi-info-circle text-primary me-2"></i>
-                What's the difference?
-              </h6>
-              <ul className="mb-0 small">
-                <li><strong>With 2FA:</strong> Full access including first-class reservations</li>
-                <li><strong>Standard Access:</strong> All features except first-class reservations</li>
-              </ul>
-            </div>
-
-            <div className="d-grid gap-3">
-              <Button 
-                size="lg" 
-                onClick={handleEnable2FA}
-                className="btn-gradient-primary fw-bold border-0 shadow-sm"
-              >
-                <i className="bi bi-shield-check me-2"></i>
-                Enable 2FA (Full Access)
-              </Button>
-              
-              <Button 
-                variant="outline-secondary" 
-                size="lg"
-                onClick={handleSkip2FA}
-                className="rounded-3 fw-semibold"
-              >
-                <i className="bi bi-skip-forward me-2"></i>
-                Continue with Standard Access
-              </Button>
-            </div>
-          </Card.Body>
-        </Card>
-      </div>
-    );
-  }
-
-  // Show TOTP form if user chose to enable 2FA or if it was required from parent
-  if (showTotpForm || totpRequired) {
-    return (
-      <div className="login-container">
-        <Card className="shadow-lg border-0 card-transparent login-form-card">
-          <Card.Body className="p-5">
-            <div className="text-center mb-4">
-              <i className="bi bi-shield-check display-3 text-primary-custom mb-3"></i>
-              <h3 className="fw-bold text-primary-custom mb-2">
-                Two-Factor Authentication
-              </h3>
-              <p className="text-muted">
-                Enter your 2FA code to complete login
-              </p>
-            </div>
-
-            {error && (
-              <Alert variant="danger" className="mb-4 rounded-3 border-0">
-                <div className="d-flex align-items-center">
-                  <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                  {error}
-                </div>
-              </Alert>
-            )}
-
-            <Form onSubmit={handleTotpSubmit}>
-              <Form.Group className="mb-4">
-                <Form.Label className="fw-bold text-dark">2FA Code</Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="Enter 6-digit code"
-                  value={totpCode}
-                  onChange={(e) => {
-                    setTotpCode(e.target.value);
-                    if (error) setError(null);
-                  }}
-                  required
-                  disabled={loading}
-                  maxLength={6}
-                  pattern="[0-9]{6}"
-                  className="form-control-light totp-input rounded-3 border-0 shadow-sm"
-                  size="lg"
-                />
-                <Form.Text className="text-muted mt-2">
-                  <i className="bi bi-info-circle me-1"></i>
-                  Enter the 6-digit code from your authenticator app
-                </Form.Text>
-              </Form.Group>
-
-              <div className="d-grid gap-3">
-                <Button 
-                  type="submit"
-                  size="lg" 
-                  disabled={loading || totpCode.length !== 6}
-                  className="btn-gradient-primary fw-bold border-0 shadow-sm"
-                >
-                  {loading ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" />
-                      Verifying...
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-shield-check me-2"></i>
-                      Verify Code & Enable Full Access
-                    </>
-                  )}
-                </Button>
-                
-                <Button 
-                  variant="outline-secondary" 
-                  size="lg"
-                  onClick={handleBackToLogin}
-                  disabled={loading}
-                  className="rounded-3 fw-semibold"
-                >
-                  <i className="bi bi-arrow-left me-2"></i>
-                  Back to Login
-                </Button>
-              </div>
-            </Form>
-          </Card.Body>
-        </Card>
-      </div>
-    );
-  }
-
+  //-----------------------------------------------------------------------------
+  // Render the login form
   return (
-    <div className="login-container">
-      <Card className="shadow-lg border-0 card-transparent login-form-card">
-        <Card.Body className="p-5">
-              <div className="text-center mb-4">
-                <i className="bi bi-train-front display-3 text-primary-custom mb-3 train-icon"></i>
-                <h3 className="fw-bold text-primary-custom mb-2">
-                  Welcome Back
-                </h3>
-                <p className="text-muted">
-                  Sign in to your account to make reservations
-                </p>
+    <div className="container-fluid d-flex justify-content-center align-items-center min-vh-100 px-3 py-4">
+      <div className="w-100" style={{ maxWidth: '450px' }}>
+        <div className="card shadow-lg border-0" style={{ background: '#ffffff', borderRadius: '20px' }}>
+          <div className="card-body p-4">
+            <div className="text-center mb-4">
+              <div className="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style={{ width: '80px', height: '80px', background: 'linear-gradient(45deg, #1e40af, #3b82f6)' }}>
+                <i className={`bi ${totpRequired ? 'bi-shield-lock-fill' : 'bi-train-front-fill'} text-white`} style={{ fontSize: '2rem' }}></i>
               </div>
-
-              {error && (
-                <Alert 
-                  variant="danger" 
-                  className="mb-4 rounded-3 border-0"
-                  style={{
-                    backgroundColor: '#f8d7da',
-                    color: '#58151c',
-                    border: '1px solid #f1aeb5'
-                  }}
-                >
-                  <div className="d-flex align-items-center">
-                    <i className="bi bi-exclamation-triangle-fill me-2"></i>
-                    {error}
-                  </div>
+              <h2 className="fw-bold" style={{ color: '#1e40af' }}>
+                {totpRequired ? 'Two-Factor Authentication' : 'Welcome Back'}
+              </h2>
+            </div>
+            <Form onSubmit={handleSubmit}>
+              {/* Display error messages */}
+              {errorMessage && (
+                <Alert variant="danger" onClose={() => setErrorMessage('')} dismissible className="border-0 shadow-sm">
+                  <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                  {errorMessage}
                 </Alert>
               )}
-
-              <Form onSubmit={handleLogin}>
-                <Form.Group className="mb-4">
-                  <Form.Label className="fw-bold text-dark">Username</Form.Label>
-                  <Form.Control
-                    type="text"
-                    placeholder="Enter your username"
-                    value={username}
-                    onChange={(e) => {
-                      setUsername(e.target.value);
-                      if (error) setError(null);
-                    }}
-                    required
-                    disabled={loading}
-                    className="form-control-light rounded-3 border-0 shadow-sm"
-                    size="lg"
-                  />
-                </Form.Group>
-
-                <Form.Group className="mb-4">
-                  <Form.Label className="fw-bold text-dark">Password</Form.Label>
-                  <Form.Control
-                    type="password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (error) setError(null);
-                    }}
-                    required
-                    disabled={loading}
-                    className="form-control-light rounded-3 border-0 shadow-sm"
-                    size="lg"
-                  />
-                </Form.Group>
-
-                <div className="d-grid mb-4">
-                  <Button 
-                    type="submit"
-                    size="lg" 
-                    disabled={loading}
-                    className="btn-gradient-primary fw-bold border-0 shadow-sm"
-                  >
-                    {loading ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2" role="status" />
-                        Signing in...
-                      </>
-                    ) : (
-                      <>
-                        <i className="bi bi-box-arrow-in-right me-2"></i>
-                        Sign In
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                <div className="text-center">
-                  <Button 
-                    variant="link"
-                    onClick={handleBackToHome}
-                    disabled={loading}
-                    className="text-decoration-none text-muted fw-semibold"
-                  >
-                    <i className="bi bi-arrow-left me-2"></i>
-                    Back to Train Seat View
-                  </Button>
-                </div>
-              </Form>
-
-            </Card.Body>
-          </Card>
+              {!totpRequired ? (
+                <>
+                  {/* Username input */}
+                  <Form.Group className="mb-4">
+                    <Form.Label className="fw-bold text-dark">Username</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={username}
+                      onChange={handleUsernameChange}
+                      placeholder="Enter your username"
+                      required
+                      disabled={isLoading}
+                      className="border-0 shadow-sm"
+                      style={{ borderRadius: '10px', padding: '12px 16px', background: '#f8fafc' }}
+                    />
+                  </Form.Group>
+                  {/* Password input */}
+                  <Form.Group className="mb-4">
+                    <Form.Label className="fw-bold text-dark">Password</Form.Label>
+                    <Form.Control
+                      type="password"
+                      value={password}
+                      onChange={handlePasswordChange}
+                      placeholder="Enter your password"
+                      required
+                      disabled={isLoading}
+                      className="border-0 shadow-sm"
+                      style={{ borderRadius: '10px', padding: '12px 16px', background: '#f8fafc' }}
+                    />
+                  </Form.Group>
+                </>
+              ) : (
+                <>
+                  {/* TOTP Code input */}
+                  <Form.Group className="mb-4">
+                    <Form.Label className="fw-bold text-dark">TOTP Code</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={totpCode}
+                      onChange={handleTotpChange}
+                      placeholder="000000"
+                      required
+                      disabled={isLoading}
+                      className="border-0 shadow-sm text-center"
+                      style={{ borderRadius: '10px', padding: '12px 16px', background: '#f8fafc', fontSize: '1.5rem', letterSpacing: '0.3rem' }}
+                      maxLength={6}
+                    />
+                  </Form.Group>
+                  <div className="alert alert-info border-0 shadow-sm mb-4" style={{ borderRadius: '10px' }}>
+                    <small>
+                      Complete 2FA for full access including first-class reservations, or skip to continue with limited access.
+                    </small>
+                  </div>
+                </>
+              )}
+              {/* Submit button */}
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-100 fw-bold border-0 shadow-sm mb-3"
+                size="lg"
+                style={{ 
+                  borderRadius: '10px',
+                  background: 'linear-gradient(90deg, #1e40af 0%, #3b82f6 100%)',
+                  padding: '12px'
+                }}
+              >
+                {isLoading ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    {totpRequired ? 'Verifying...' : 'Signing In...'}
+                  </>
+                ) : (
+                  <>
+                    {totpRequired ? 'Verify' : 'Sign In'}
+                  </>
+                )}
+              </Button>
+              
+              {/* Skip TOTP button */}
+              {totpRequired && (
+                <Button
+                  variant="outline-warning"
+                  onClick={() => onSkipTotp && onSkipTotp()}
+                  disabled={isLoading}
+                  className="w-100 fw-bold border-2 mb-3"
+                  size="lg"
+                  style={{ 
+                    borderRadius: '10px',
+                    padding: '12px'
+                  }}
+                >
+                  Skip 2FA
+                </Button>
+              )}
+              
+              
+            </Form>
+          </div>
         </div>
-      );
-    }
+      </div>
+    </div>
+  );
+}
 
+//-----------------------------------------------------------------------------
 export default LoginForm;

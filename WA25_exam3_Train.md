@@ -2,7 +2,7 @@
 
 # “Train”
 
-INITIAL version \- text will be finalized around Sep 2, 2025 and modifications will be highlighted in red. MAKE SURE you check it again after finalization.
+FINAL version \- modifications highlighted with RED text.
 
 Design and implement a web application to reserve seats for a train journey. The application must meet the following requirements.
 
@@ -16,9 +16,9 @@ On the left side, the page should always display a button to make a new reservat
 
 On the right side, the page will show, in the top part, the three buttons to select the class (first, second, economy) and, below the buttons, the two-dimensional seat visualization for the selected class, similar to the previous description, but with the possibility to see the user reserved seats and to select additional seats for a new reservation.
 
-In detail, clicking on an existing reservation must update the right side of the page to show the actual occupied seats by that reservation in orange (see later), and the seats occupied by others in red. On the contrary, clicking on the new reservation button allow to select the class, to see the updated two-dimensional seat visualization for that class (see later) and to interact with it to perform a new reservation. Beware, a reservation can include *one or more seats but they can only be in the same class*.
+In detail, clicking on an existing reservation must update the right side of the page to show the actual occupied seats by that reservation in purple ~~orange (see later)~~, and the seats occupied by others in red. On the contrary, clicking on the new reservation button allow to select the class, to see the updated two-dimensional seat visualization for that class (see later) and to interact with it to perform a new reservation. Beware, a reservation can include *one or more seats but they can only be in the same class*.
 
-The reservation happens by directly interacting with the seats using the two-dimensional visualization, taking into account the seats’ status (and displaying them accordingly). Seats can have three states:
+The reservation happens by directly interacting with the seats using the two-dimensional visualization, taking into account the seats’ status (and displaying them accordingly). Seats can have ~~three~~ four states:
 
 * Occupied by others (red): seats cannot be requested since it is reserved by other users.  
 * Occupied by the user (orange): seats cannot be requested since it is reserved by the current user in another reservation.  

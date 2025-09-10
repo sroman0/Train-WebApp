@@ -76,6 +76,7 @@ function App() {
       if (result.canDoTotp && !result.isTotp) {
         // User logged in successfully but can choose 2FA for full access
         setPendingUser(result); // Store for potential 2FA upgrade
+        setTotpRequired(true); // Show TOTP form
         return result; // Return to LoginForm for 2FA choice
       } else {
         // Standard login complete
@@ -169,48 +170,50 @@ function App() {
           <Route 
             path="/" 
             element={
-              <main className="main-content">
-                <Container fluid className="pt-2 pb-3 px-3 min-vh-100 d-flex flex-column">
-                  {message && (
-                    <Alert 
-                      variant={messageType} 
-                      dismissible 
-                      onClose={() => setMessage('')}
-                      className={`shadow-lg rounded-3 border-0 mb-3 fw-bold alert-solid alert-${messageType}`}
-                      style={{
-                        backgroundColor: 
-                          messageType === 'success' ? '#28a745' : 
-                          messageType === 'warning' ? '#ffc107' : 
-                          messageType === 'info' ? '#17a2b8' : 
-                          '#dc3545',
-                        color: 'white',
-                        border: `2px solid ${
-                          messageType === 'success' ? '#1e7e34' : 
-                          messageType === 'warning' ? '#e0a800' : 
-                          messageType === 'info' ? '#138496' : 
-                          '#c82333'
-                        }`,
-                        position: 'relative',
-                        zIndex: 9999
-                      }}
-                    >
-                      <div className="d-flex align-items-center">
-                        <i className={`bi ${
-                          messageType === 'success' ? 'bi-check-circle-fill' : 
-                          messageType === 'warning' ? 'bi-exclamation-triangle-fill' : 
-                          messageType === 'info' ? 'bi-info-circle-fill' : 
-                          'bi-x-circle-fill'
-                        } me-2`}></i>
-                        {message}
-                      </div>
-                    </Alert>
-                  )}
+              user ? <Navigate to="/reservations" replace /> : (
+                <main className="main-content">
+                  <Container fluid className="pt-2 pb-3 px-3 min-vh-100 d-flex flex-column">
+                    {message && (
+                      <Alert 
+                        variant={messageType} 
+                        dismissible 
+                        onClose={() => setMessage('')}
+                        className={`shadow-lg rounded-3 border-0 mb-3 fw-bold alert-solid alert-${messageType}`}
+                        style={{
+                          backgroundColor: 
+                            messageType === 'success' ? '#28a745' : 
+                            messageType === 'warning' ? '#ffc107' : 
+                            messageType === 'info' ? '#17a2b8' : 
+                            '#dc3545',
+                          color: 'white',
+                          border: `2px solid ${
+                            messageType === 'success' ? '#1e7e34' : 
+                            messageType === 'warning' ? '#e0a800' : 
+                            messageType === 'info' ? '#138496' : 
+                            '#c82333'
+                          }`,
+                          position: 'relative',
+                          zIndex: 9999
+                        }}
+                      >
+                        <div className="d-flex align-items-center">
+                          <i className={`bi ${
+                            messageType === 'success' ? 'bi-check-circle-fill' : 
+                            messageType === 'warning' ? 'bi-exclamation-triangle-fill' : 
+                            messageType === 'info' ? 'bi-info-circle-fill' : 
+                            'bi-x-circle-fill'
+                          } me-2`}></i>
+                          {message}
+                        </div>
+                      </Alert>
+                    )}
 
-                  <div className="flex-grow-1">
-                    <MainSeatView user={user} onLogin={() => window.location.href = '/login'} onManageReservations={() => window.location.href = '/reservations'} onLogout={handleLogout} />
-                  </div>
-                </Container>
-              </main>
+                    <div className="flex-grow-1">
+                      <MainSeatView user={user} onLogin={() => window.location.href = '/login'} onManageReservations={() => window.location.href = '/reservations'} onLogout={handleLogout} />
+                    </div>
+                  </Container>
+                </main>
+              )
             } 
           />
           
@@ -280,7 +283,6 @@ function App() {
                       <SeatSelectionView 
                         user={user} 
                         setMessage={showMessage} 
-                        onBackToSeatView={() => window.location.href = '/'} 
                         onLogout={handleLogout} 
                       />
                     </div>
@@ -322,7 +324,6 @@ function LoginWithTotp({ user, totpRequired, onLogin, onTotp, onSkipTotp, pendin
       totpRequired={totpRequired} 
       onTotp={onTotp}
       onSkipTotp={onSkipTotp}
-      userInfo={pendingUser} // Pass pending user info for 2FA choice
     />
   );
 }

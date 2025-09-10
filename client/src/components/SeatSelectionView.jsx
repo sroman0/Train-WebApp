@@ -3,7 +3,7 @@ import { Container, Row, Col, Card, Button, Badge, Alert, Form, Modal } from 're
 import * as API from '../API';
 
 // Reservation Management Page (requires authentication)
-function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
+function SeatSelectionView({ user, setMessage, onLogout }) {
   // State for reservations (left side)
   const [reservations, setReservations] = useState([]);
   const [selectedReservationId, setSelectedReservationId] = useState(null);
@@ -14,6 +14,7 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
   const [seats, setSeats] = useState([]);
   const [statistics, setStatistics] = useState({});
   const [requestedSeats, setRequestedSeats] = useState([]); // Local state for new reservations
+  const [failedSeats, setFailedSeats] = useState([]); // Seats that caused reservation failure (blue for 7s)
   const [autoSelectCount, setAutoSelectCount] = useState('');
   const [loading, setLoading] = useState(false);
   const [reserving, setReserving] = useState(false);
@@ -21,6 +22,14 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
   // Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [reservationToDelete, setReservationToDelete] = useState(null);
+
+  // Error modal state for seat conflicts
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorModalMessage, setErrorModalMessage] = useState('');
+
+  // Success modal state for successful reservations
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successModalMessage, setSuccessModalMessage] = useState('');
 
   // Current user's seats across all reservations
   const [userSeats, setUserSeats] = useState([]);
@@ -52,9 +61,13 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
     }
   };
 
-  // Load data on mount
+  // Load reservations once on mount (not dependent on class selection)
   useEffect(() => {
     loadReservations();
+  }, []);
+
+  // Load seats when class changes
+  useEffect(() => {
     loadSeats();
   }, [selectedClass]);
 
@@ -77,7 +90,7 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
       setUserSeats(allUserSeats);
     } catch (error) {
       console.error('Error loading reservations:', error);
-      setMessage('Error loading reservations', 'danger');
+      setMessage(`Error loading reservations: ${error.message}`, 'danger');
     }
   };
 
@@ -87,6 +100,7 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
     
     // Clear all local state first
     setRequestedSeats([]);
+    setFailedSeats([]);
     setAutoSelectCount('');
     setSelectedReservationId(null);
     setIsNewReservation(true);
@@ -109,7 +123,7 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
       setStatistics(data.statistics || {});
     } catch (error) {
       console.error('Error loading seats:', error);
-      setMessage('Error loading seats', 'danger');
+      setMessage(`Error loading seats for ${selectedClass} class: ${error.message}`, 'danger');
     } finally {
       setLoading(false);
     }
@@ -119,6 +133,7 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
   const handleClassChange = (newClass) => {
     setSelectedClass(newClass);
     setRequestedSeats([]); // Clear requested seats when changing class
+    setFailedSeats([]); // Clear failed seats when changing class
   };
 
   // Handle reservation selection (show seats in orange)
@@ -126,6 +141,7 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
     setSelectedReservationId(reservationId);
     setIsNewReservation(false);
     setRequestedSeats([]); // Clear any requested seats
+    setFailedSeats([]); // Clear any failed seats
     
     // Find the reservation and switch to its class
     const reservation = reservations.find(r => r.id === reservationId);
@@ -139,20 +155,44 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
     setSelectedReservationId(null);
     setIsNewReservation(true);
     setRequestedSeats([]);
+    setFailedSeats([]); // Clear any failed seats
   };
 
   // Get seat status and color
   const getSeatStatus = (seat) => {
+    // Check if seat is in failed state (blue highlighting for 7 seconds)
+    if (failedSeats.includes(seat.id)) {
+      return { 
+        status: 'failed', 
+        color: 'primary', 
+        disabled: true,
+        customStyle: { backgroundColor: '#007bff', borderColor: '#007bff', color: 'white' } // Blue
+      };
+    }
+    
     // Check if seat is occupied by current user (in any reservation)
     const userSeat = userSeats.find(us => us.id === seat.id);
     if (userSeat) {
-      // All user seats show in orange - no interaction allowed in any mode
-      return { 
-        status: 'user_occupied', 
-        color: 'outline-warning', 
-        disabled: true,
-        customStyle: { backgroundColor: '#fd7e14', borderColor: '#fd7e14', color: 'white' } // Orange
-      };
+      // Different colors based on context:
+      // - When viewing existing reservation: purple for that reservation's seats
+      // - When creating new reservation: orange for all user's seats (can't select)
+      if (!isNewReservation && selectedReservationId && userSeat.reservationId === selectedReservationId) {
+        // Purple for the specific reservation being viewed
+        return { 
+          status: 'user_occupied_selected', 
+          color: 'outline-secondary', 
+          disabled: true,
+          customStyle: { backgroundColor: '#6f42c1', borderColor: '#6f42c1', color: 'white' } // Purple
+        };
+      } else {
+        // Orange for all other user seats (can't be selected)
+        return { 
+          status: 'user_occupied', 
+          color: 'outline-warning', 
+          disabled: true,
+          customStyle: { backgroundColor: '#fd7e14', borderColor: '#fd7e14', color: 'white' } // Orange
+        };
+      }
     }
     
     // Check if seat is occupied by others
@@ -228,7 +268,14 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
     setReserving(true);
     try {
       await API.createReservation(requestedSeats);
-      setMessage(`Successfully reserved ${requestedSeats.length} seat${requestedSeats.length > 1 ? 's' : ''}!`, 'success');
+      
+      // Show prominent success modal instead of just a small message
+      const successMessage = `Successfully reserved ${requestedSeats.length} seat${requestedSeats.length > 1 ? 's' : ''}!`;
+      setSuccessModalMessage(successMessage);
+      setShowSuccessModal(true);
+      
+      // Also set the regular message for consistency
+      setMessage(successMessage, 'success');
       
       // Reload data to show the new reservation
       await loadReservations();
@@ -241,8 +288,50 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
     } catch (error) {
       console.error('Reservation failed:', error);
       
-      // Show clear error message to the user
-      setMessage(`Reservation failed: ${error.message}`, 'danger');
+      // Check if the error is due to seat availability conflicts
+      if (error.message && error.message.includes('no longer available')) {
+        // Identify which seats were requested but are now occupied
+        const conflictedSeatIds = [];
+        
+        // Reload seats to get current state
+        const currentSeatsData = await API.getSeats(selectedClass);
+        const currentSeats = currentSeatsData.seats || [];
+        
+        // Find seats that were requested but are now occupied by others
+        requestedSeats.forEach(requestedSeatId => {
+          const currentSeat = currentSeats.find(s => s.id === requestedSeatId);
+          if (currentSeat && currentSeat.is_occupied) {
+            // Check if it's not occupied by current user
+            const isUserSeat = userSeats.find(us => us.id === requestedSeatId);
+            if (!isUserSeat) {
+              conflictedSeatIds.push(requestedSeatId);
+            }
+          }
+        });
+        
+        // Show conflicted seats in blue for 7 seconds
+        if (conflictedSeatIds.length > 0) {
+          setFailedSeats(conflictedSeatIds);
+          setTimeout(() => {
+            setFailedSeats([]);
+          }, 7000); // 7 seconds
+          
+          // Show prominent error modal for seat conflicts
+          const conflictMessage = `${conflictedSeatIds.length} seat${conflictedSeatIds.length > 1 ? 's were' : ' was'} taken by other users while you were selecting. The conflicted seats are highlighted in blue on the map.`;
+          setErrorModalMessage(conflictMessage);
+          setShowErrorModal(true);
+          
+          // Also set the regular message for consistency
+          setMessage(`Reservation cancelled: ${conflictedSeatIds.length} seat${conflictedSeatIds.length > 1 ? 's were' : ' was'} taken by other users (highlighted in blue)`, 'danger');
+        } else {
+          setMessage(`Reservation failed: ${error.message}`, 'danger');
+        }
+      } else {
+        // For other types of failures, also show modal for prominence
+        setErrorModalMessage(`Reservation failed: ${error.message}`);
+        setShowErrorModal(true);
+        setMessage(`Reservation failed: ${error.message}`, 'danger');
+      }
       
       // CRITICAL: Always refresh after any failure to ensure consistent state
       console.log('🔄 Refreshing seat data after reservation failure...');
@@ -299,24 +388,38 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
       return status.status === 'occupied_others';
     }).length;
     
-    const occupiedByUser = seats.filter(seat => {
+    const occupiedByUserSelected = seats.filter(seat => {
+      const status = getSeatStatus(seat);
+      return status.status === 'user_occupied_selected';
+    }).length;
+    
+    const occupiedByUserOther = seats.filter(seat => {
       const status = getSeatStatus(seat);
       return status.status === 'user_occupied';
     }).length;
     
+    // For available seats, we need to exclude those that are locally requested
     const available = seats.filter(seat => {
       const status = getSeatStatus(seat);
       return status.status === 'available';
     }).length;
     
+    // Requested seats count from local state (only for new reservations)
     const requested = isNewReservation ? requestedSeats.length : 0;
+    
+    const failed = seats.filter(seat => {
+      const status = getSeatStatus(seat);
+      return status.status === 'failed';
+    }).length;
     
     return {
       total: seats.length,
       occupiedByOthers,
-      occupiedByUser,
+      occupiedByUserSelected,
+      occupiedByUserOther,
       available,
-      requested
+      requested,
+      failed
     };
   };
 
@@ -426,14 +529,6 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
                     <Button 
                       variant="outline-secondary" 
                       size="sm" 
-                      onClick={onBackToSeatView}
-                    >
-                      <i className="bi bi-arrow-left me-2"></i>
-                      Back to Seat View
-                    </Button>
-                    <Button 
-                      variant="outline-secondary" 
-                      size="sm" 
                       onClick={onLogout}
                     >
                       <i className="bi bi-box-arrow-right me-2"></i>
@@ -514,7 +609,6 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
                 <div className="p-4 text-center text-muted">
                   <i className="bi bi-ticket-perforated fs-1 mb-3 d-block"></i>
                   <p>No reservations yet</p>
-                  <small>Click "New Reservation" to start</small>
                 </div>
               )}
             </Card.Body>
@@ -633,12 +727,22 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
                                 <small>Occupied by others: {currentStats.occupiedByOthers}</small>
                               </div>
                             </Col>
-                            <Col sm={6} md={3} className="mb-2">
-                              <div className="d-flex align-items-center">
-                                <Badge style={{backgroundColor: '#fd7e14', border: 'none'}} className="me-2">●</Badge>
-                                <small>Occupied by you: {currentStats.occupiedByUser}</small>
-                              </div>
-                            </Col>
+                            {currentStats.occupiedByUserSelected > 0 && (
+                              <Col sm={6} md={3} className="mb-2">
+                                <div className="d-flex align-items-center">
+                                  <Badge style={{backgroundColor: '#6f42c1', border: 'none'}} className="me-2">●</Badge>
+                                  <small>Your seats (this reservation): {currentStats.occupiedByUserSelected}</small>
+                                </div>
+                              </Col>
+                            )}
+                            {currentStats.occupiedByUserOther > 0 && (
+                              <Col sm={6} md={3} className="mb-2">
+                                <div className="d-flex align-items-center">
+                                  <Badge style={{backgroundColor: '#fd7e14', border: 'none'}} className="me-2">●</Badge>
+                                  <small>Your seats (other reservations): {currentStats.occupiedByUserOther}</small>
+                                </div>
+                              </Col>
+                            )}
                             <Col sm={6} md={3} className="mb-2">
                               <div className="d-flex align-items-center">
                                 <Badge bg="success" className="me-2">●</Badge>
@@ -651,6 +755,14 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
                                 <small>Requested: {currentStats.requested}</small>
                               </div>
                             </Col>
+                            {currentStats.failed > 0 && (
+                              <Col sm={6} md={3} className="mb-2">
+                                <div className="d-flex align-items-center">
+                                  <Badge bg="primary" className="me-2">●</Badge>
+                                  <small>Conflict (7s): {currentStats.failed}</small>
+                                </div>
+                              </Col>
+                            )}
                           </Row>
                           <div className="mt-2">
                             <small className="text-muted">Total seats: {currentStats.total}</small>
@@ -724,6 +836,72 @@ function SeatSelectionView({ user, setMessage, onBackToSeatView, onLogout }) {
           </Card>
         </Col>
       </Row>
+
+      {/* Success Modal for Successful Reservations */}
+      <Modal show={showSuccessModal} onHide={() => setShowSuccessModal(false)} centered>
+        <Modal.Header closeButton className="bg-success text-white">
+          <Modal.Title>
+            <i className="bi bi-check-circle-fill me-2"></i>
+            Reservation Successful
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="text-center py-4">
+          <div className="mb-3">
+            <i className="bi bi-check-circle text-success" style={{fontSize: '3rem'}}></i>
+          </div>
+          <h5 className="mb-3 text-success">Reservation Confirmed!</h5>
+          <p className="mb-3">
+            {successModalMessage}
+          </p>
+          <div className="alert alert-success">
+            <i className="bi bi-info-circle me-2"></i>
+            Your reservation has been added to your reservations list.
+          </div>
+        </Modal.Body>
+        <Modal.Footer className="justify-content-center">
+          <Button 
+            variant="success" 
+            onClick={() => setShowSuccessModal(false)}
+            className="px-4"
+          >
+            <i className="bi bi-check-lg me-2"></i>
+            Great!
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Error Modal for Seat Conflicts */}
+      <Modal show={showErrorModal} onHide={() => setShowErrorModal(false)} centered>
+        <Modal.Header closeButton className="bg-danger text-white">
+          <Modal.Title>
+            <i className="bi bi-exclamation-triangle-fill me-2"></i>
+            Reservation Failed
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="text-center py-4">
+          <div className="mb-3">
+            <i className="bi bi-x-circle text-danger" style={{fontSize: '3rem'}}></i>
+          </div>
+          <h5 className="mb-3 text-danger">Seat Conflict Detected</h5>
+          <p className="mb-3">
+            {errorModalMessage}
+          </p>
+          <div className="alert alert-info">
+            <i className="bi bi-info-circle me-2"></i>
+            The seat map has been refreshed to show the current availability.
+          </div>
+        </Modal.Body>
+        <Modal.Footer className="justify-content-center">
+          <Button 
+            variant="primary" 
+            onClick={() => setShowErrorModal(false)}
+            className="px-4"
+          >
+            <i className="bi bi-check-lg me-2"></i>
+            Understood
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} centered>
