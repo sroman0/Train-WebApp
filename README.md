@@ -2,12 +2,12 @@
 
 A web application for managing train seat reservations with three car classes (first, second, economy) and user authentication with optional 2FA.
 
-## Server-side
+## 1. Server-side
 
 ### HTTP APIs offered by the server
 
 - **POST `/api/sessions`**: Login endpoint - Parameters: `{username, password}` - Returns: User object with authentication status
-- **POST `/api/sessions/totp`**: 2FA TOTP verification - Parameters: `{totpCode}` - Returns: Complete authentication with 2FA
+- **POST `/api/login-totp`**: 2FA TOTP verification - Parameters: `{totpCode}` - Returns: Complete authentication with 2FA
 - **GET `/api/sessions/current`**: Get current user session - Parameters: none (uses session cookies) - Returns: Current user info or 401
 - **DELETE `/api/sessions/current`**: Logout endpoint - Parameters: none - Returns: Logout confirmation
 - **GET `/api/seats/:carClass`**: Get seat map for a car class - Parameters: carClass (first|second|economy) - Returns: Seats array and statistics
@@ -18,11 +18,11 @@ A web application for managing train seat reservations with three car classes (f
 ### Database tables
 
 - **users**: User accounts (id, username, name, hash, salt, otp_secret)
-- **seats**: Train seats (id, car_class, row_number, seat_number, seat_code)  
-- **reservations**: Reservation records (id, user_id, created_at)
+- **seats**: Train seats (id, car_class, row_number, seat_number, seat_code, is_occupied)  
+- **reservations**: Reservation records (id, user_id, timestamp)
 - **reservation_seats**: Links reservations to seats (reservation_id, seat_id)
 
-## Client-side
+## 2. Client-side
 
 ### React application routes
 
@@ -37,16 +37,29 @@ A web application for managing train seat reservations with three car classes (f
 - **MainSeatView**: Public seat availability view with car class selection and real-time seat status
 - **SeatSelectionView**: Authenticated reservation management with interactive seat maps and booking functionality
 
-## Overall
+## 3. Overall
 
 ### Screenshot
 
-![Reservation Management Page](./img/screenshot.png)
+#### Login page
+![Login Page](./img/Login.png)
+#### Totp page
+![Totp Page](./img/Totp_Page.png)
+#### Seat View page
+![Seat View Page](./img/Seat_View_Page.png)
+#### Seat Reservation page
+![Seat Reservation Page](./img/Seat_Reservation_Page.png)
+#### 404 page
+![404 Page](./img/404_page.png)
+
 
 ### Usernames and passwords
 
-- **mario** / **password** - Regular user with two reservations in first class
-- **lucia** / **password** - Regular user with reservations in second and economy classes  
-- **giovanni** / **password** - Regular user with one reservation in each class (first, second, economy)
-- **anna** / **password** - Regular user with no reservations (2FA enabled for first class access)
+#### Regular Users (All can optionally use 2FA)
+- **Username**: `mario` | **Password**: `password` - Regular user with two reservations in first class
+- **Username**: `lucia` | **Password**: `password` - Regular user with reservations in second and economy classes  
+- **Username**: `giovanni` | **Password**: `password` - Regular user with one reservation in each class (first, second, economy)
+- **Username**: `anna` | **Password**: `password` - Regular user with no reservations
+
+**Note**: All users can choose to enable 2FA for enhanced security or skip it for standard access. TOTP secret: `LXBSMDTMSP2I5XFXIYRGFVWSFI`.
 

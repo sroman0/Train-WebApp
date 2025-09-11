@@ -185,6 +185,24 @@ function LoginForm({ onLogin, totpRequired, onTotp, onSkipTotp }) {
                 </Button>
               )}
               
+              {/* Return to Main View button - only show on initial login, not during TOTP */}
+              {!totpRequired && (
+                <Button
+                  variant="outline-secondary"
+                  onClick={() => navigate('/')}
+                  disabled={isLoading}
+                  className="w-100 fw-bold border-2"
+                  size="lg"
+                  style={{ 
+                    borderRadius: '10px',
+                    padding: '12px'
+                  }}
+                >
+                  <i className="bi bi-house me-2"></i>
+                  Return to Main View
+                </Button>
+              )}
+              
               
             </Form>
           </div>

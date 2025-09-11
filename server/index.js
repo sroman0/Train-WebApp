@@ -254,7 +254,12 @@ app.post('/api/reservations', isLoggedIn, [
     const reservationId = await daoReservations.createReservation(req.user.id, seatIds);
     res.status(201).json({ id: reservationId });
   } catch (err) {
-    if (err.message === 'Some seats are no longer available') {
+    // Check if the error is related to seat conflicts
+    if (err.message && (
+      err.message.includes('no longer available') || 
+      err.message.includes('seats were taken') ||
+      err.message.includes('taken by another user')
+    )) {
       res.status(400).json({ error: err.message });
     } else {
       res.status(500).json({ error: 'Database error' });

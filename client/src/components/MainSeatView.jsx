@@ -48,7 +48,6 @@ function MainSeatView({ user, onLogin, onManageReservations, onLogout }) {
       setSeats(data.seats || []);
       setStatistics(data.statistics || {});
     } catch (error) {
-      console.error('Error loading seats:', error);
       setSeats([]);
       setStatistics({});
     } finally {
@@ -254,16 +253,6 @@ function MainSeatView({ user, onLogin, onManageReservations, onLogout }) {
                 <i className={`${carClasses[selectedClass].icon} me-2`}></i>
                 {carClasses[selectedClass].name} - Seat Availability
               </h5>
-              <Button 
-                variant="outline-light" 
-                size="sm" 
-                onClick={loadSeats}
-                disabled={loading}
-                className="rounded-pill"
-              >
-                <i className="bi bi-arrow-clockwise me-1"></i>
-                Refresh
-              </Button>
             </Card.Header>
             <Card.Body className="p-4">
               {loading ? (

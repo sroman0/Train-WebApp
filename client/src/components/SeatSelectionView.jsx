@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Container, Row, Col, Card, Button, Badge, Alert, Form, Modal } from 'react-bootstrap';
 import * as API from '../API';
 
@@ -27,12 +27,18 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorModalMessage, setErrorModalMessage] = useState('');
 
+  // 2FA error modal state
+  const [show2FAErrorModal, setShow2FAErrorModal] = useState(false);
+
   // Success modal state for successful reservations
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successModalMessage, setSuccessModalMessage] = useState('');
 
   // Current user's seats across all reservations
   const [userSeats, setUserSeats] = useState([]);
+
+  // Ref to store timeout ID for failed seats cleanup
+  const failedSeatsTimeoutRef = useRef(null);
 
   const carClasses = {
     first: { 
@@ -71,6 +77,17 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
     loadSeats();
   }, [selectedClass]);
 
+  // Cleanup timeout for failed seats when component unmounts
+  useEffect(() => {
+    return () => {
+      // Clear any pending timeout when component unmounts
+      if (failedSeatsTimeoutRef.current) {
+        clearTimeout(failedSeatsTimeoutRef.current);
+        failedSeatsTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
   // Load user reservations
   const loadReservations = async () => {
     try {
@@ -89,30 +106,10 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
       });
       setUserSeats(allUserSeats);
     } catch (error) {
-      console.error('Error loading reservations:', error);
       setMessage(`Error loading reservations: ${error.message}`, 'danger');
     }
   };
 
-  // Force refresh seats and clear all local state
-  const forceRefreshSeats = async () => {
-    console.log('🔄 FORCE REFRESH: Clearing all local state and reloading...');
-    
-    // Clear all local state first
-    setRequestedSeats([]);
-    setFailedSeats([]);
-    setAutoSelectCount('');
-    setSelectedReservationId(null);
-    setIsNewReservation(true);
-    
-    // Force reload both seats and reservations
-    await Promise.all([
-      loadSeats(),
-      loadReservations()
-    ]);
-    
-    setMessage('Seat map refreshed', 'info');
-  };
 
   // Load seats for current class
   const loadSeats = async () => {
@@ -122,7 +119,6 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
       setSeats(data.seats || []);
       setStatistics(data.statistics || {});
     } catch (error) {
-      console.error('Error loading seats:', error);
       setMessage(`Error loading seats for ${selectedClass} class: ${error.message}`, 'danger');
     } finally {
       setLoading(false);
@@ -131,6 +127,12 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
 
   // Handle class change
   const handleClassChange = (newClass) => {
+    // Clear any pending failed seats timeout
+    if (failedSeatsTimeoutRef.current) {
+      clearTimeout(failedSeatsTimeoutRef.current);
+      failedSeatsTimeoutRef.current = null;
+    }
+    
     setSelectedClass(newClass);
     setRequestedSeats([]); // Clear requested seats when changing class
     setFailedSeats([]); // Clear failed seats when changing class
@@ -138,6 +140,12 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
 
   // Handle reservation selection (show seats in orange)
   const handleReservationClick = (reservationId) => {
+    // Clear any pending failed seats timeout
+    if (failedSeatsTimeoutRef.current) {
+      clearTimeout(failedSeatsTimeoutRef.current);
+      failedSeatsTimeoutRef.current = null;
+    }
+    
     setSelectedReservationId(reservationId);
     setIsNewReservation(false);
     setRequestedSeats([]); // Clear any requested seats
@@ -152,6 +160,12 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
 
   // Handle new reservation button
   const handleNewReservation = () => {
+    // Clear any pending failed seats timeout
+    if (failedSeatsTimeoutRef.current) {
+      clearTimeout(failedSeatsTimeoutRef.current);
+      failedSeatsTimeoutRef.current = null;
+    }
+    
     setSelectedReservationId(null);
     setIsNewReservation(true);
     setRequestedSeats([]);
@@ -261,7 +275,7 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
 
     // Check if first class reservation requires 2FA (per exam requirements)
     if (selectedClass === 'first' && !user.isTotp) {
-      setMessage('First-class requires 2FA - Please re-login', 'danger');
+      setShow2FAErrorModal(true);
       return;
     }
 
@@ -275,7 +289,7 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
       setShowSuccessModal(true);
       
       // Also set the regular message for consistency
-      setMessage(successMessage, 'success');
+      //setMessage(successMessage, 'success');
       
       // Reload data to show the new reservation
       await loadReservations();
@@ -286,34 +300,46 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
       setAutoSelectCount('');
       
     } catch (error) {
-      console.error('Reservation failed:', error);
-      
       // Check if the error is due to seat availability conflicts
-      if (error.message && error.message.includes('no longer available')) {
-        // Identify which seats were requested but are now occupied
-        const conflictedSeatIds = [];
+      const isConflictError = error.message && (
+        error.message.includes('no longer available') || 
+        error.message.includes('seats were taken') ||
+        error.message.includes('taken by another user')
+      );
+      
+      if (isConflictError) {
+        // Parse seat codes from error message if available
+        let conflictedSeatIds = [];
         
-        // Reload seats to get current state
-        const currentSeatsData = await API.getSeats(selectedClass);
-        const currentSeats = currentSeatsData.seats || [];
-        
-        // Find seats that were requested but are now occupied by others
-        requestedSeats.forEach(requestedSeatId => {
-          const currentSeat = currentSeats.find(s => s.id === requestedSeatId);
-          if (currentSeat && currentSeat.is_occupied) {
-            // Check if it's not occupied by current user
-            const isUserSeat = userSeats.find(us => us.id === requestedSeatId);
-            if (!isUserSeat) {
-              conflictedSeatIds.push(requestedSeatId);
-            }
+        if (error.message.includes('Seats no longer available:')) {
+          // Extract seat codes from error message like "Seats no longer available: 1A, 2B"
+          const match = error.message.match(/Seats no longer available: ([^.]+)/);
+          if (match) {
+            const seatCodes = match[1].split(', ').map(code => code.trim());
+            // Find seat IDs that match these codes from our requested seats
+            conflictedSeatIds = requestedSeats.filter(seatId => {
+              const seat = seats.find(s => s.id === seatId);
+              return seat && seatCodes.includes(seat.seat_code);
+            });
           }
-        });
+        } else {
+          // For other conflict errors, highlight all requested seats
+          conflictedSeatIds = [...requestedSeats];
+        }
         
         // Show conflicted seats in blue for 7 seconds
         if (conflictedSeatIds.length > 0) {
+          // Clear any existing timeout
+          if (failedSeatsTimeoutRef.current) {
+            clearTimeout(failedSeatsTimeoutRef.current);
+          }
+          
           setFailedSeats(conflictedSeatIds);
-          setTimeout(() => {
+          
+          // Set new timeout and store reference
+          failedSeatsTimeoutRef.current = setTimeout(() => {
             setFailedSeats([]);
+            failedSeatsTimeoutRef.current = null;
           }, 7000); // 7 seconds
           
           // Show prominent error modal for seat conflicts
@@ -324,6 +350,7 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
           // Also set the regular message for consistency
           setMessage(`Reservation cancelled: ${conflictedSeatIds.length} seat${conflictedSeatIds.length > 1 ? 's were' : ' was'} taken by other users (highlighted in blue)`, 'danger');
         } else {
+          // Fallback: if we couldn't identify specific seats, still show error but no blue highlighting
           setMessage(`Reservation failed: ${error.message}`, 'danger');
         }
       } else {
@@ -334,7 +361,6 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
       }
       
       // CRITICAL: Always refresh after any failure to ensure consistent state
-      console.log('🔄 Refreshing seat data after reservation failure...');
       await Promise.all([
         loadSeats(),        // Refresh seat map with current occupied state
         loadReservations()  // Refresh user's reservations
@@ -345,7 +371,6 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
       setAutoSelectCount('');
       
       // The page now shows the true current state
-      console.log('✅ Seat data refreshed after failure');
     } finally {
       setReserving(false);
     }
@@ -369,7 +394,6 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
       setShowDeleteModal(false);
       setReservationToDelete(null);
     } catch (error) {
-      console.error('Error deleting reservation:', error);
       setMessage('Error deleting reservation', 'danger');
       setShowDeleteModal(false);
       setReservationToDelete(null);
@@ -680,16 +704,6 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
                   <i className={`${carClasses[selectedClass].icon} me-2`}></i>
                   {carClasses[selectedClass].name} - Seat Map
                 </h5>
-                <Button 
-                  variant="outline-light" 
-                  size="sm" 
-                  onClick={forceRefreshSeats}
-                  disabled={loading}
-                  className="rounded-pill"
-                >
-                  <i className="bi bi-arrow-clockwise me-1"></i>
-                  Refresh
-                </Button>
               </div>
             </Card.Header>
             <Card.Body className="p-4">
@@ -895,6 +909,39 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
           <Button 
             variant="primary" 
             onClick={() => setShowErrorModal(false)}
+            className="px-4"
+          >
+            <i className="bi bi-check-lg me-2"></i>
+            Understood
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* 2FA Error Modal for First Class Reservations */}
+      <Modal show={show2FAErrorModal} onHide={() => setShow2FAErrorModal(false)} centered>
+        <Modal.Header closeButton className="bg-warning text-dark">
+          <Modal.Title>
+            <i className="bi bi-shield-exclamation-fill me-2"></i>
+            2FA Required
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="text-center py-4">
+          <div className="mb-3">
+            <i className="bi bi-shield-exclamation text-warning" style={{fontSize: '3rem'}}></i>
+          </div>
+          <h5 className="mb-3 text-warning">Two-Factor Authentication Required</h5>
+          <p className="mb-3">
+            First-class reservations require 2FA authentication for enhanced security.
+          </p>
+          <div className="alert alert-warning">
+            <i className="bi bi-info-circle me-2"></i>
+            Please log out and re-login with 2FA enabled to reserve first-class seats.
+          </div>
+        </Modal.Body>
+        <Modal.Footer className="justify-content-center">
+          <Button 
+            variant="warning" 
+            onClick={() => setShow2FAErrorModal(false)}
             className="px-4"
           >
             <i className="bi bi-check-lg me-2"></i>
