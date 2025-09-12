@@ -31,8 +31,7 @@ exports.getUserById = (id) => {
 // Get user by username and password
 exports.getUser = (username, password) => {
   return new Promise((resolve, reject) => {
-    console.log('Attempting to authenticate user:', username);
-    
+
     const sql = `
       SELECT id, username, name, hash, salt, otp_secret
       FROM users
@@ -44,11 +43,9 @@ exports.getUser = (username, password) => {
         reject(err);
       }
       else if (!row) {
-        console.log('User not found:', username);
         resolve(false);
       }
       else {
-        console.log('User found, verifying password for:', username);
         
         crypto.scrypt(password, row.salt, 32, (err, hashedPassword) => {
           if (err) {
@@ -56,11 +53,9 @@ exports.getUser = (username, password) => {
             reject(err);
           }
           if (!crypto.timingSafeEqual(Buffer.from(row.hash, 'hex'), hashedPassword)) {
-            console.log('Password verification failed for:', username);
             resolve(false);
           }
           else {
-            console.log('Password verification successful for:', username);
             const user = {
               id: row.id,
               username: row.username,

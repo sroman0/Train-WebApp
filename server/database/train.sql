@@ -104,9 +104,6 @@ INSERT INTO seats (car_class, row_number, seat_number, seat_code) VALUES
   ('economy', 17, 1, '17A'), ('economy', 17, 2, '17B'), ('economy', 17, 3, '17C'), ('economy', 17, 4, '17D'),
   ('economy', 18, 1, '18A'), ('economy', 18, 2, '18B'), ('economy', 18, 3, '18C'), ('economy', 18, 4, '18D');
 
--- Mark some seats as occupied for testing
-UPDATE seats SET is_occupied = 1 WHERE seat_code IN ('1A', '1B', '3C', '10A', '5A', '10B', '5A', '5B', '15C', '1A', '1B', '1C');
-
 -- Sample reservations:
 -- Mario: Two reservations in same class (first class)
 -- Lucia: Reservations in two different classes (second and economy) 
@@ -136,3 +133,8 @@ INSERT INTO reservation_seats (reservation_id, seat_id) VALUES
   (7, (SELECT id FROM seats WHERE seat_code = '1A' AND car_class = 'economy')),
   (7, (SELECT id FROM seats WHERE seat_code = '1B' AND car_class = 'economy')),
   (7, (SELECT id FROM seats WHERE seat_code = '1C' AND car_class = 'economy'));
+
+-- Mark seats as occupied based on reservations
+UPDATE seats SET is_occupied = 1 WHERE id IN (
+  SELECT DISTINCT seat_id FROM reservation_seats
+);

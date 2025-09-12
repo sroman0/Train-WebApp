@@ -36,7 +36,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 //----------------------------------------------------------------------------
-// Session management (using default MemoryStore as in lectures)
+// Session management
 app.use(session({
   secret: "secret",
   resave: false,
@@ -109,12 +109,7 @@ function isLoggedIn(req, res, next) {
   return res.status(401).json({ error: 'Not authenticated' });
 }
 
-//----------------------------------------------------------------------------
-// middleware to check if user has completed TOTP
-function isTotp(req, res, next) {
-  if (req.session.method === 'totp') return next();
-  return res.status(401).json({ error: 'TOTP authentication required' });
-}
+
 
 //----------------------------------------------------------------------------
 // Helper to send user info to client, including isTotp
@@ -243,8 +238,8 @@ app.post('/api/reservations', isLoggedIn, [
     // Check if reservation includes first-class seats
     const seats = await daoSeats.getSeatsByIds(seatIds);
     const hasFirstClassSeats = seats.some(seat => seat.car_class === 'first');
-    
-    // Per exam requirements: First-class reservations require 2FA
+
+    // First-class reservations require 2FA
     if (hasFirstClassSeats && req.session.method !== 'totp') {
       return res.status(403).json({ 
         error: 'First-class reservations require 2FA authentication. Please enable 2FA and try again.' 
@@ -268,7 +263,7 @@ app.post('/api/reservations', isLoggedIn, [
 });
 
 //----------------------------------------------------------------------------
-// Delete reservation (authentication required)
+// Delete reservation
 app.delete('/api/reservations/:id', isLoggedIn, async (req, res) => {
   try {
     const reservationId = parseInt(req.params.id);
