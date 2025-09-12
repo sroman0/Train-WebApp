@@ -37,6 +37,9 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
   // Deletion success modal state
   const [showDeletionSuccessModal, setShowDeletionSuccessModal] = useState(false);
 
+  // Auto-select validation error state
+  const [autoSelectError, setAutoSelectError] = useState('');
+
   // Current user's seats across all reservations
   const [userSeats, setUserSeats] = useState([]);
 
@@ -139,6 +142,7 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
     setSelectedClass(newClass);
     setRequestedSeats([]); // Clear requested seats when changing class
     setFailedSeats([]); // Clear failed seats when changing class
+    setAutoSelectError(''); // Clear auto-select error when changing class
   };
 
   // Handle reservation selection (show seats in orange)
@@ -173,6 +177,7 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
     setIsNewReservation(true);
     setRequestedSeats([]);
     setFailedSeats([]); // Clear any failed seats
+    setAutoSelectError(''); // Clear auto-select error when starting new reservation
   };
 
   // Get seat status and color
@@ -243,28 +248,52 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
     }
     // All other seat types (user_occupied, occupied_others, failed) cannot be clicked
     
-    // Clear any auto-select count
+    // Clear any auto-select count and error
     setAutoSelectCount('');
+    setAutoSelectError('');
   };
 
   // Handle auto-select
   const handleAutoSelect = () => {
     const count = parseInt(autoSelectCount);
-    if (isNaN(count) || count < 0) return;
-    
     const availableSeats = seats.filter(seat => getSeatStatus(seat).status === 'available');
+    const maxAvailable = availableSeats.length + requestedSeats.length; // Include already requested seats
+    
+    // Validation checks
+    if (isNaN(count)) {
+      setAutoSelectError('Please enter a valid number');
+      return;
+    }
+    
+    if (count < 0) {
+      setAutoSelectError('Number of seats cannot be negative');
+      return;
+    }
+    
+    if (count > maxAvailable) {
+      setAutoSelectError(`${count} seats cannot be selected, but only ${maxAvailable} seats are available`);
+      return;
+    }
+    
+    // Clear any previous error
+    setAutoSelectError('');
+    
     const currentRequested = requestedSeats.length;
     
     if (count === currentRequested) return; // No change needed
     
     if (count > currentRequested) {
-      // Add more seats
+      // Add more seats randomly
       const needed = count - currentRequested;
       const availableForSelection = availableSeats.filter(seat => !requestedSeats.includes(seat.id));
-      const toAdd = availableForSelection.slice(0, needed);
+      
+      // Shuffle available seats randomly
+      const shuffled = [...availableForSelection].sort(() => Math.random() - 0.5);
+      const toAdd = shuffled.slice(0, needed);
+      
       setRequestedSeats(prev => [...prev, ...toAdd.map(seat => seat.id)]);
     } else {
-      // Remove some seats
+      // Remove some seats (keep the first 'count' seats)
       setRequestedSeats(prev => prev.slice(0, count));
     }
   };
@@ -806,10 +835,14 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
                                     min="0"
                                     max={currentStats.available + currentStats.requested}
                                     value={autoSelectCount}
-                                    onChange={(e) => setAutoSelectCount(e.target.value)}
+                                    onChange={(e) => {
+                                      setAutoSelectCount(e.target.value);
+                                      setAutoSelectError(''); // Clear error when user types
+                                    }}
                                     placeholder="Number of seats"
                                     className="me-2"
                                     style={{maxWidth: '150px'}}
+                                    isInvalid={!!autoSelectError}
                                   />
                                   <Button 
                                     variant="outline-primary" 
@@ -819,6 +852,12 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
                                     Apply
                                   </Button>
                                 </Form.Group>
+                                {autoSelectError && (
+                                  <div className="text-danger mt-2 small">
+                                    <i className="bi bi-exclamation-triangle me-1"></i>
+                                    {autoSelectError}
+                                  </div>
+                                )}
                               </Col>
                               <Col md={6} className="text-end">
                                 <Button
