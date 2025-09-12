@@ -317,6 +317,19 @@ html, body, #root {
   border-radius: 20px;
 }
 
+/* Custom badge colors for seat statistics */
+.badge-purple {
+  background-color: #6f42c1 !important;
+  color: white !important;
+  border: none !important;
+}
+
+.badge-orange {
+  background-color: #fd7e14 !important;
+  color: white !important;
+  border: none !important;
+}
+
 /* Scrollable areas */
 .scrollable-area {
   max-height: 70vh;

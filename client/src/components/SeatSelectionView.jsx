@@ -34,6 +34,9 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successModalMessage, setSuccessModalMessage] = useState('');
 
+  // Deletion success modal state
+  const [showDeletionSuccessModal, setShowDeletionSuccessModal] = useState(false);
+
   // Current user's seats across all reservations
   const [userSeats, setUserSeats] = useState([]);
 
@@ -380,7 +383,7 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
   const handleDeleteReservation = async (reservationId) => {
     try {
       await API.deleteReservation(reservationId);
-      setMessage('Reservation deleted', 'success');
+      setShowDeletionSuccessModal(true);
       
       // If this was the selected reservation, clear selection
       if (selectedReservationId === reservationId) {
@@ -686,11 +689,11 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
               } me-2`}></i>
               <div>
                 {user.isTotp ? (
-                  <span>✓ Full access with 2FA enabled</span>
+                  <span>Full access with 2FA enabled</span>
                 ) : selectedClass === 'first' ? (
-                  <span>⚠️ 2FA Required - Please log out and re-login with 2FA to reserve first-class seats</span>
+                  <span>2FA Required - Please log out and re-login with 2FA to reserve first-class seats</span>
                 ) : (
-                  <span>ℹ️ Standard access - First-class reservations require 2FA</span>
+                  <span>Standard access - First-class reservations require 2FA</span>
                 )}
               </div>
             </div>
@@ -744,7 +747,7 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
                             {currentStats.occupiedByUserSelected > 0 && (
                               <Col sm={6} md={3} className="mb-2">
                                 <div className="d-flex align-items-center">
-                                  <Badge style={{backgroundColor: '#6f42c1', border: 'none'}} className="me-2">●</Badge>
+                                  <Badge className="badge-purple me-2">●</Badge>
                                   <small>Your seats (this reservation): {currentStats.occupiedByUserSelected}</small>
                                 </div>
                               </Col>
@@ -752,7 +755,7 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
                             {currentStats.occupiedByUserOther > 0 && (
                               <Col sm={6} md={3} className="mb-2">
                                 <div className="d-flex align-items-center">
-                                  <Badge style={{backgroundColor: '#fd7e14', border: 'none'}} className="me-2">●</Badge>
+                                  <Badge className="badge-orange me-2">●</Badge>
                                   <small>Your seats (other reservations): {currentStats.occupiedByUserOther}</small>
                                 </div>
                               </Col>
@@ -880,6 +883,39 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
           >
             <i className="bi bi-check-lg me-2"></i>
             Great!
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Deletion Success Modal */}
+      <Modal show={showDeletionSuccessModal} onHide={() => setShowDeletionSuccessModal(false)} centered>
+        <Modal.Header closeButton className="bg-success text-white">
+          <Modal.Title>
+            <i className="bi bi-check-circle-fill me-2"></i>
+            Reservation Cancelled
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="text-center py-4">
+          <div className="mb-3">
+            <i className="bi bi-check-circle text-success" style={{fontSize: '3rem'}}></i>
+          </div>
+          <h5 className="mb-3 text-success">Reservation Cancelled Successfully!</h5>
+          <p className="mb-3">
+            Your reservation has been successfully removed from the system.
+          </p>
+          <div className="alert alert-info">
+            <i className="bi bi-info-circle me-2"></i>
+            The seat is now available.
+          </div>
+        </Modal.Body>
+        <Modal.Footer className="justify-content-center">
+          <Button 
+            variant="success" 
+            onClick={() => setShowDeletionSuccessModal(false)}
+            className="px-4"
+          >
+            <i className="bi bi-check-lg me-2"></i>
+            OK
           </Button>
         </Modal.Footer>
       </Modal>

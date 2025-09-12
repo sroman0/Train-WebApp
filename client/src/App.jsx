@@ -306,13 +306,13 @@ function App() {
 // Login Component with TOTP handling
 //----------------------------------------------------------------------------
 function LoginWithTotp({ user, totpRequired, onLogin, onTotp, onSkipTotp, pendingUser }) {
-  const navigate = useNavigate();
+  //const navigate = useNavigate();
 
-  useEffect(() => {
-    if (user && !totpRequired) {
-      navigate('/', { replace: true });
-    }
-  }, [user, totpRequired, navigate]);
+  //useEffect(() => {
+  //  if (user && !totpRequired) {
+  //    navigate('/', { replace: true });
+  //  }
+  //}, [user, totpRequired, navigate]);
 
   if (user && !totpRequired) {
     return null;
