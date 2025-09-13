@@ -271,7 +271,7 @@ function SeatSelectionView({ user, setMessage, onLogout }) {
     }
     
     if (count > maxAvailable) {
-      setAutoSelectError(`${count} seats cannot be selected, but only ${maxAvailable} seats are available`);
+      setAutoSelectError(`${count} seats cannot be selected, only ${maxAvailable} seats are available`);
       return;
     }
     
